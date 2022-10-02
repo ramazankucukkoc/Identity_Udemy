@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Diagnostics;
+using System.Security.Claims;
 
 namespace Identity_Udemy.Controllers
 {
@@ -40,9 +41,13 @@ namespace Identity_Udemy.Controllers
                     if (await userManager.IsLockedOutAsync(user))
                     {
                         ModelState.AddModelError("", "Hesabınız bir süreliğine kilitlenmiştir.Lütfen daha sonrs tekrar deneyiniz");
-
+                        return View(userLogin);
                     }
-
+                    if (userManager.IsEmailConfirmedAsync(user).Result==false)
+                    {
+                        ModelState.AddModelError("", "Email adresiniz onaylanmamıştır.Lütfen epostanızı kontrol ediniz.");
+                        return View(userLogin);
+                    }
 
                     await signInManager.SignOutAsync();
                     Microsoft.AspNetCore.Identity.SignInResult result = await signInManager.PasswordSignInAsync(user, userLogin.Password, userLogin.RememberMe, false);
@@ -86,11 +91,11 @@ namespace Identity_Udemy.Controllers
             return View();
         }
 
-        [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-        public IActionResult Error()
-        {
-            return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
-        }
+        //[ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
+        ////public IActionResult Error()
+        ////{
+        ////    return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+        ////}
 
         public IActionResult SignUp()
         {
@@ -106,15 +111,24 @@ namespace Identity_Udemy.Controllers
             ModelState.Remove("Picture");
             if (ModelState.IsValid)
             {
-                AppUser appUser = new AppUser();
-                appUser.UserName = userViewModel.UserName;
-                appUser.Email=userViewModel.Email;
-                appUser.PhoneNumber = userViewModel.PhoneNumber;
+                AppUser user = new AppUser();
+                user.UserName = userViewModel.UserName;
+                user.Email=userViewModel.Email;
+                user.PhoneNumber = userViewModel.PhoneNumber;
 
-            IdentityResult result=await userManager.CreateAsync(appUser, userViewModel.Password);
+            IdentityResult result=await userManager.CreateAsync(user, userViewModel.Password);
 
                 if (result.Succeeded)
                 {
+                    string confirmationToken = await userManager.GenerateEmailConfirmationTokenAsync(user);
+
+                    string link = Url.Action("ConfirmEmail", "Home", new
+                    {
+                        userId = user.Id,
+                        token = confirmationToken,
+                    }, protocol: HttpContext.Request.Scheme);
+
+                    Helper.EmailConfirmation.SendEmail(link, user.Email);
                     return RedirectToAction("LogIn");
 
                 }
@@ -144,7 +158,7 @@ namespace Identity_Udemy.Controllers
                     userId = user.Id,
                     token = passwordResetToken
                 }, HttpContext.Request.Scheme);
-                Helper.PasswordReset.PasswordResetSendEmail(passwrodResetLink);
+                Helper.PasswordReset.PasswordResetSendEmail(passwrodResetLink,user.Email);
                 ViewBag.status = "success";
             }
             else
@@ -188,6 +202,94 @@ namespace Identity_Udemy.Controllers
             }
 
             return View(passwordResetViewModel);
+        }
+   
+        public async Task<IActionResult> ResetEmailConfirm(string userId,string token)
+        {
+            var user =await userManager.FindByIdAsync(userId);
+            IdentityResult result =await userManager.ConfirmEmailAsync(user, token);
+            if (result.Succeeded)
+            {
+                ViewBag.status = "Email adresiniz onyalanmıştır.Login ekranında giriş yapabilirsiniz.";
+            }
+            else
+            {
+                ViewBag.status = "Bir hata meydana geldi.Lütfen daha sonra tekrar deneyiniz.";
+            }
+            return View();
+
+
+        }
+   
+        public IActionResult FacebookLogin(string ReturnUrl)
+        {
+            string RedirectUrl = Url.Action("ExternalResponse", "Home", new { ReturnUrl = ReturnUrl });
+            var properties= signInManager.ConfigureExternalAuthenticationProperties("Facebook", RedirectUrl);
+
+            return new ChallengeResult("Facebook", properties);
+        }
+        public async Task<IActionResult> ExternalResponse(string ReturnUrl="/")
+        {
+            ExternalLoginInfo info=await signInManager.GetExternalLoginInfoAsync();
+            if (info==null)
+            {
+                return RedirectToAction("LogIn");
+            }
+            else
+            {
+                Microsoft.AspNetCore.Identity.SignInResult result = await signInManager
+                    .ExternalLoginSignInAsync(info.LoginProvider,info.ProviderKey,true);
+                if (result.Succeeded)
+                {
+                    return Redirect(ReturnUrl);
+                }
+                else
+                {
+                    AppUser user = new AppUser();
+                    user.Email = info.Principal.FindFirst(ClaimTypes.Email).Value;
+                    string ExternalUserId = info.Principal.FindFirst(ClaimTypes.NameIdentifier).Value;
+                    if (info.Principal.HasClaim(x=>x.Type==ClaimTypes.Name))
+                   {
+                        string userName = info.Principal.FindFirst(ClaimTypes.Name).Value;
+                        userName = userName.Replace(' ', '-').ToLower() + ExternalUserId.Substring(0, 5).ToString();
+                        user.UserName = userName;
+                    }
+                    else
+                    {
+                        user.UserName = info.Principal.FindFirst(ClaimTypes.Email).Value;
+                    }
+                    IdentityResult createResult=await userManager.CreateAsync(user);
+                    if (createResult.Succeeded)
+                    {
+                        IdentityResult loginResult = await userManager.AddLoginAsync(user, info);
+                        if (loginResult.Succeeded)
+                        {
+                            // await signInManager.SignInAsync(user, true);
+                            await signInManager.ExternalLoginSignInAsync(info.LoginProvider, info.ProviderKey,true);
+                            return Redirect(ReturnUrl);
+                        }
+                        else
+                        {
+                            AddModelError(loginResult);
+                        }
+                    }
+                    else
+                    {
+                        AddModelError(createResult);
+                    }
+
+                }
+            }
+            List<string> errors = ModelState.Values.SelectMany(x => x.Errors).Select(y => y.ErrorMessage).ToList();
+
+
+            return RedirectToAction("Error",errors);
+
+        }
+
+        public ActionResult Error()
+        {
+            return View();
         }
     }
 }

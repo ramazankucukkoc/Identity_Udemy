@@ -21,6 +21,9 @@
                         <a class="nav-link " asp-controller="Member" asp-action="Index">Ana Sayfa</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link " asp-controller="Member" asp-action="AnkaraPage">Ankara Sayfası</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link " asp-controller="Admin" asp-action="Index">Admin ana sayfa</a>
                     </li>
                     <li class="nav-item">
@@ -34,8 +37,8 @@
             </div>
         </div>
     </nav>
-    <div class="container">
-        <main role="main" class="pb-3">
+    <div class="container" style="margin-top:10px">
+   
             <div class="row">
                 <div class="col-md-8">
                  @RenderBody()
@@ -44,15 +47,18 @@
                     <h3>Menü</h3>
 
                     <a class="btn btn-info" asp-action="PasswordChange" asp-controller="Member">Şifre Değiştirme</a>
+                    <a class="btn btn-info" asp-action="ViolencePage" asp-controller="Member">Şiddet İçeren Sayfası</a>
+                    <a class="nav-link " asp-controller="Member" asp-action="AnkaraPage">Ankara Sayfası</a>
 
                     <a class="btn btn-info" asp-action="UserEdit" asp-controller="Member">Bilgi Güncelleme</a>
+                <a class="btn btn-info" asp-action="ExchangeRedirect" asp-controller="Member">Borsa</a>
                     <a class="btn btn-info" asp-action="LogOut" asp-controller="Member" 
                     asp-route-returnUrl="/Home/Index">Çıkış Yap </a>
 
 
                 </div>
             </div>
-        </main>
+      
     </div>
 @*
     <footer class="border-top footer text-muted">

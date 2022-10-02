@@ -1,5 +1,9 @@
+using Identity_Udemy.ClaimProvider;
 using Identity_Udemy.CustomValidation;
 using Identity_Udemy.Models;
+using Identity_Udemy.Requirement;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,15 +15,35 @@ builder.Services.AddDbContext<AppIdentityDbContext>(opt =>
 {
     opt.UseSqlServer(builder.Configuration.GetConnectionString("SqlConnection"));
 });
+builder.Services.AddTransient<IAuthorizationHandler, ExpireDateExchangeHandler>();
+builder.Services.AddAuthorization(opt =>
+{
+    opt.AddPolicy("AnkaraPolicy", policy =>
+    {
+        policy.RequireClaim("city", "ankara");
+    });
+    opt.AddPolicy("ViolencePolicy", policy =>
+    {
+        policy.RequireClaim("violance");
+    });
+    opt.AddPolicy("ExchangePolicy", policy =>
+    {
+        policy.AddRequirements(new ExpireDateExchangeRequirement());
+    });
+});
 
+builder.Services.AddAuthentication().AddFacebook(opts =>
+{
+    opts.AppId = builder.Configuration["Authentication:Facebook:AppId"];
+    opts.AppSecret = builder.Configuration["Authentication:Facebook:AppSecret"];
 
-
+});
 
 //VERÝLERÝN DATABASE EKLEME YAPABÝLÝRÝYORUZ AddEntityFrameworkStores metoduyla.
 builder.Services.AddIdentity<AppUser, AppRole>(opt =>
 {
     opt.User.RequireUniqueEmail = true;
-    opt.User.AllowedUserNameCharacters = "abcçdefghýijklmnoöpqrsþtuüvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._";
+    opt.User.AllowedUserNameCharacters = "abcçdefgðhýijklmnoöpqrsþtuüvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._";
 
     opt.Password.RequiredLength = 4;
     opt.Password.RequireNonAlphanumeric = false;//* ? vs gibi karakter þifreye girmesini istemiyoruz
@@ -43,8 +67,14 @@ builder.Services.ConfigureApplicationCookie(opts =>
     opts.Cookie = cookieBuilder;
     opts.SlidingExpiration = true;
     opts.ExpireTimeSpan = System.TimeSpan.FromDays(60);
-    opts.AccessDeniedPath = new PathString("/Member/AccessDenied");//Kulanýcý sayfa eriþemediði ile ilgili bilgi verecek sayfa bu . 
+    opts.AccessDeniedPath = new PathString("/Member/AccessDenied");//Yetkisiz Kulanýcý sayfa eriþemediði ile ilgili bilgi verecek sayfa bu . 
 });
+
+builder.Services.AddScoped<IClaimsTransformation, ClaimProvider>();
+
+
+
+
 
 
 var app = builder.Build();
